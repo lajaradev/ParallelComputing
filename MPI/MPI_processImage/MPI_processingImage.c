@@ -144,20 +144,18 @@ void rowsForEachProcess(int nproces, int row, int *rowsSend, int *rowsProcessed)
         rowsProcessed[nproces - 1] += row % nproces;
         rowsSend[nproces - 1] = rowsProcessed[nproces - 1] + 2;
     }
-
-
-    /* 
-    for(i = 0; i < nproces; i ++){
+ 
+    /*for(i = 0; i < nproces; i ++){
         printf("Process [%i]\n", i);  
         printf("ELEMENTS SEND %i \n", rowsSend[i]);
         printf("ELEMENTS PROCESS %i \n", rowsProcessed[i]);  
         printf("\n");
-    }
-    */
+    }*/
+
     
 }
 
-int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -np 5 proc lena4096x4096.raw 4096 4096 average outAverage4096.raw
+int main(int argc,char *argv[]){
     
     int row = atoi(argv[2]); // Fetch the value and cast it to int
     int col = atoi(argv[3]);
@@ -179,38 +177,81 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
 
     rowsSend = (int*) malloc(nproces * sizeof(int));
 	rowsProcessed = (int*) malloc(nproces*sizeof(int));
-    
-    rowsForEachProcess(nproces, row, rowsSend, rowsProcessed); // calculate rows for each process
-        
+
+    if(strcmp(argv[4], "sobel") == 0){ // Send 2 rows more
+        rowsForEachProcess(nproces, row + 2, rowsSend, rowsProcessed); // calculate rows for each process
+    }
+    else{
+        rowsForEachProcess(nproces, row, rowsSend, rowsProcessed); // calculate rows for each process
+    }
+     
     if(myrank == 0){ // PROCESS 0
-      
+
         matrixOriginal = createMatrix(row, col); // reserve memory for the original matrix
-        matrixFiltered = createMatrix(row, col); // reserve memory for the filtered matrix
-                
+
         FILE *f = fopen(argv[1], "rb"); // open file by argument
-       // printf("Image %s \n", argv[1]);
+        // printf("Image %s \n", argv[1]);
 
-        if(f){ // if the file.raw exists ...
-        
-            readFile(matrixOriginal, argv[1], &row, &col);
-            // showMatrixOrigianl(matrixOriginal);
+        if(strcmp(argv[4], "sobel") == 0){
+            
+            matrixFiltered = createMatrix(row + 2, col + 2); // reserve memory for the filtered matrix
+            
+            if(f) { 
+                for (int i = 1; i < row + 1; i++) { // Read file from row [1][1] to write in position [1][1] of the filtered matrix
+                    for(int j = 1; j < col + 1; j ++){
+                        int bytes_read = fread(&matrixFiltered[i][j], sizeof(unsigned char), 1, f);  
+                    }
+                }
+                fclose(f);
 
-            starttime = MPI_Wtime(); // moment of start
+                starttime = MPI_Wtime(); // moment of start       
 
-            for(int i = 0; i < row; i++){ // COPY BORDERS
-                memcpy(matrixFiltered[i], matrixOriginal[i], row * sizeof(char) );}
+                for(i = 1; i < row + 1; i ++){ // In all rows (symmetry)
+                    matrixFiltered[i][0] = matrixFiltered[i][2]; // New column equal a position [][] original file
+                    matrixFiltered[i][col + 1] = matrixFiltered[i][col - 1]; // The same but int last column
+                }
 
-            for(int j = 0; j < col; j++){ // COPY BORDERS
-                memcpy(matrixFiltered[j], matrixOriginal[j], col * sizeof(char) );}
-             
+                for(i = 1; i < col + 1; i ++){ // In all column (symmetry)
+                    matrixFiltered[0][i] = matrixFiltered[2][i]; // New row equal a position [][] original file
+                    matrixFiltered[row + 1][i] = matrixFiltered[row - 1][i]; // The same but int last column
+                }
+
+                matrixFiltered[0][0] = matrixFiltered[2][2]; // Give values to the corners
+                matrixFiltered[0][col + 1] = matrixFiltered[2][col - 1];
+                matrixFiltered[row + 1][0] = matrixFiltered[row - 1][2];
+                matrixFiltered[row + 1][col + 1] = matrixFiltered[row - 1][col - 1];
+            }
         }
+        else{
+            
+            matrixFiltered = createMatrix(row, col); // reserve memory for the filtered matrix        
+
+            if(f){ // if the file.raw exists ...
+        
+                readFile(matrixOriginal, argv[1], &row, &col);
+                // showMatrixOrigianl(matrixOriginal);
+
+                starttime = MPI_Wtime(); // moment of start  
+
+                for(int i = 0; i < row; i++){ // COPY BORDERS
+                    memcpy(matrixFiltered[i], matrixOriginal[i], row * sizeof(char) );}
+
+                for(int j = 0; j < col; j++){ // COPY BORDERS
+                    memcpy(matrixFiltered[j], matrixOriginal[j], col * sizeof(char) );}
+            }       
+
+       }
    
     }
     else{ // rest of process
 
         matrixOriginal = createMatrix(rowsSend[myrank], col);   // allocate memory for element blocks
-        matrixFiltered = createMatrix(rowsSend[myrank], col);     
-
+          
+        if(strcmp(argv[4], "sobel") == 0){
+            matrixFiltered = createMatrix(rowsSend[myrank], col + 2);   
+        }else{
+            matrixFiltered = createMatrix(rowsSend[myrank], col);   
+        }
     }
 
     if(myrank == 0){ // SEND DATA TO ALL PROCESS
@@ -219,25 +260,28 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
         int rowEnd = rowsSend[0] - 1 ; // Last row is all send - 1
 
     
-    //  printf("Process [%i]: elementsNeed %i, rowsProcessed %i \n", myrank, rowsSend[0], rowsProcessed[0]);
-    //  printf("Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
+        //printf("Process [%i]: elementsNeed %i, rowsProcessed %i \n", myrank, rowsSend[0], rowsProcessed[0]);
+        //printf("Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
     
-
         for(i = 1; i < nproces; i ++){ // Minus to process 0
             
         rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
         rowEnd = rowStart + (rowsSend[i] - 1); 
 
             for(j = rowStart; j <= rowEnd; j++){ //MPI SEND
-            // Send (Data, columns, type, where, tag)
-                MPI_Send(matrixOriginal[j], col, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD);                    
+                // Send (Data, columns, type, where, tag)
+                if(strcmp(argv[4], "sobel") == 0){
+                    MPI_Send(matrixFiltered[j], col + 2, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD); 
+                }else{
+                    MPI_Send(matrixOriginal[j], col, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD); 
+                }                       
             }   
 
                        
-        //  printf("\nPROCESS [%i] SEND MATRIX ORIGINAL TO PROCESS [%i] \n", myrank, i);
-        //  printf("Rows Send: %i, Rows Processed %i \n", rowsSend[i], rowsProcessed[i]);
-        //  printf("SEND: Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
-        //  showMatrixOrigianl(matrixOriginal);
+        //printf("\nPROCESS [%i] SEND MATRIX ORIGINAL TO PROCESS [%i] \n", myrank, i);
+        //printf("Rows Send: %i, Rows Processed %i \n", rowsSend[i], rowsProcessed[i]);
+        //printf("SEND: Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
+        //showMatrixOrigianl(matrixOriginal);
         
 
         }
@@ -246,17 +290,21 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
       
         for(i = 0; i < rowsSend[myrank]; i ++){
             // Recive (Data, columns, type, where, tag)
-            MPI_Recv(matrixOriginal[i], col, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
+            if(strcmp(argv[4], "sobel") == 0){
+                MPI_Recv(matrixFiltered[i], col + 2, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
+            }
+            else{
+                MPI_Recv(matrixOriginal[i], col, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
+            }
+            
         }
-
     
         // printf("\nPROCESS [%i] RECIVE MATRIX ORIGINAL TO PROCESS [%i]\n", myrank, 0);
         // printf("Rows Receives: %i \n", rowsSend[myrank]);
         // showMatrixOrigianl(matrixOriginal);
     
-    
     }
-	
+
 	// ALL PROCESS START CALCULATIONS 
 
         //  printf("P [%i] -> Rows: %i\n", myrank, rowsProcessed[myrank]);
@@ -323,35 +371,35 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
              
             for(i = 1; i <= rowsProcessed[myrank]; i ++){
                 
-                for(j = 1; j < col - 1; j ++){
+                for(j = 1; j < col + 1; j ++){
 
                     // value of c
                     int C = 
-                    (matrixOriginal[i-1][j-1] * -1) +
-                    (matrixOriginal[i-1][j]   *  0) +
-                    (matrixOriginal[i-1][j+1] *  1) +
-                    (matrixOriginal[i][j-1]   * -2) +
-                    (matrixOriginal[i][j]     *  0) +
-                    (matrixOriginal[i][j+1]   *  2) +
-                    (matrixOriginal[i+1][j-1] * -1) +
-                    (matrixOriginal[i+1][j]   *  0) +
-                    (matrixOriginal[i+1][j+1] *  1);
+                    (matrixFiltered[i-1][j-1] * -1) +
+                    (matrixFiltered[i-1][j]   *  0) +
+                    (matrixFiltered[i-1][j+1] *  1) +
+                    (matrixFiltered[i][j-1]   * -2) +
+                    (matrixFiltered[i][j]     *  0) +
+                    (matrixFiltered[i][j+1]   *  2) +
+                    (matrixFiltered[i+1][j-1] * -1) +
+                    (matrixFiltered[i+1][j]   *  0) +
+                    (matrixFiltered[i+1][j+1] *  1);
 
                     // value of f
                     int F =
-                    (matrixOriginal[i-1][j-1] * -1) +
-                    (matrixOriginal[i-1][j]   * -2) +
-                    (matrixOriginal[i-1][j+1] * -1) +
-                    (matrixOriginal[i][j-1]   *  0) +
-                    (matrixOriginal[i][j]     *  0) +
-                    (matrixOriginal[i][j+1]   *  0) +
-                    (matrixOriginal[i+1][j-1] *  1) +
-                    (matrixOriginal[i+1][j]   *  2) +
-                    (matrixOriginal[i+1][j+1] *  1);
+                    (matrixFiltered[i-1][j-1] * -1) +
+                    (matrixFiltered[i-1][j]   * -2) +
+                    (matrixFiltered[i-1][j+1] * -1) +
+                    (matrixFiltered[i][j-1]   *  0) +
+                    (matrixFiltered[i][j]     *  0) +
+                    (matrixFiltered[i][j+1]   *  0) +
+                    (matrixFiltered[i+1][j-1] *  1) +
+                    (matrixFiltered[i+1][j]   *  2) +
+                    (matrixFiltered[i+1][j+1] *  1);
 
                     int sobel = sqrt(pow(C,2) + pow(F,2)); // formula
-                    matrixFiltered[i][j] = sobel; // IN THE POSITION I COPY THE VALUE OF THE CALCULATED SOBEL 
-                   
+                    matrixOriginal[i - 1][j - 1] = sobel; // IN THE POSITION I COPY THE VALUE OF THE CALCULATED SOBEL 
+                     
                 }
                  
             }
@@ -369,25 +417,46 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
             for(i = 1; i < nproces; i ++){
                 
                 rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
-                //printf("Rows Start: %i\n", rowStart);
+                //printf("Rows Start Recv: %i\n", rowStart);
             
                 for(j = 0; j < rowsProcessed[i]; j ++){ // Receives rows
-                    MPI_Recv(matrixFiltered[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                    if(strcmp(argv[4], "sobel") == 0){ 
+                        MPI_Recv(matrixOriginal[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                    }
+                    else{
+                        MPI_Recv(matrixFiltered[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                    }
+                   
                 }
                 
-                // printf("P[%i], Send to me %i rows\n", i, rowsProcessed[i]);
-                // showMatrixFiltered(matrixFiltered);
+                //printf("P[%i], Send to me %i rows\n", i, rowsProcessed[i]);
+                //showMatrixFiltered(matrixFiltered);
             }
 
         }
         else{  // All process send to process 0 the processed data                            
             
-            for(j = 1; j <= rowsProcessed[myrank]; j ++){
-               MPI_Send(&matrixFiltered[j][1], col - 2, MPI_UNSIGNED_CHAR, 0, 7, MPI_COMM_WORLD);
-            }
-            // Send from column 1 to the size to send, for this we use &[][]
+            if(strcmp(argv[4], "sobel") == 0){
 
-            // printf(" I'm Process [%i] - Send to [%i] -> rowsProcessed %i\n", myrank, 0, rowsProcessed[myrank]);
+                for(j = 0; j < rowsProcessed[myrank]; j ++){
+                    
+                    MPI_Send(&matrixOriginal[j][0], col, MPI_UNSIGNED_CHAR, 0, 7, MPI_COMM_WORLD);         
+                            
+                }
+            }
+            else{
+
+                for(j = 1; j <= rowsProcessed[myrank]; j ++){
+                   
+                    MPI_Send(&matrixFiltered[j][1], col - 2, MPI_UNSIGNED_CHAR, 0, 7, MPI_COMM_WORLD);
+                    
+                }
+                
+                // Send from column 1 to the size to send, for this we use &[][]
+
+                // printf(" I'm Process [%i] - Send to [%i] -> rowsProcessed %i\n", myrank, 0, rowsProcessed[myrank]);
+            }
+            
                          
         }
 
@@ -396,8 +465,14 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
             finishtime = MPI_Wtime(); // moment of end
             printf("Time: %f \n", finishtime - starttime);
             
-            writeFile(matrixFiltered, row, col, argv[5]);
-            //writeTXTMatrix(matrixFiltered, row, col);
+            if(strcmp(argv[4], "sobel") == 0){ 
+                writeFile(matrixOriginal, row, col, argv[5]);
+                //writeTXTMatrix(matrixOriginal, row, col);
+            }
+            else{
+                writeFile(matrixFiltered, row, col, argv[5]);
+                writeTXTMatrix(matrixFiltered, row, col);
+            }     
             
             FILE *f2 = fopen("data.txt", "w");
             
@@ -409,6 +484,9 @@ int main(int argc,char *argv[]){ // mpicc -o proc mpi_process.c -lm && mpirun -n
             fprintf(f2, "Time: %f \n", finishtime - starttime);
             
         }
-        
+
+    free(matrixOriginal);
+    free(matrixFiltered);
+    
     MPI_Finalize();
 }
