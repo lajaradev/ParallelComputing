@@ -262,41 +262,68 @@ int main(int argc,char *argv[]){
     
         //printf("Process [%i]: elementsNeed %i, rowsProcessed %i \n", myrank, rowsSend[0], rowsProcessed[0]);
         //printf("Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
-    
-        for(i = 1; i < nproces; i ++){ // Minus to process 0
-            
-        rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
-        rowEnd = rowStart + (rowsSend[i] - 1); 
 
-            for(j = rowStart; j <= rowEnd; j++){ //MPI SEND
-                // Send (Data, columns, type, where, tag)
-                if(strcmp(argv[4], "sobel") == 0){
+        if(strcmp(argv[4], "sobel") == 0){
+
+            for(i = 1; i < nproces; i ++){ // Minus to process 0
+                
+            rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
+            rowEnd = rowStart + (rowsSend[i] - 1); 
+
+                for(j = rowStart; j <= rowEnd; j++){ //MPI SEND
+                    
+                    // Send (Data, columns, type, where, tag)
                     MPI_Send(matrixFiltered[j], col + 2, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD); 
-                }else{
+                                         
+                }   
+
+            }
+        }
+        else{
+
+            for(i = 1; i < nproces; i ++){ // Minus to process 0
+                
+            rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
+            rowEnd = rowStart + (rowsSend[i] - 1); 
+
+                for(j = rowStart; j <= rowEnd; j++){ //MPI SEND
+                    
+                    // Send (Data, columns, type, where, tag)                   
                     MPI_Send(matrixOriginal[j], col, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD); 
-                }                       
-            }   
+                                          
+                }   
+            }
+   
+        }   
 
                        
         //printf("\nPROCESS [%i] SEND MATRIX ORIGINAL TO PROCESS [%i] \n", myrank, i);
         //printf("Rows Send: %i, Rows Processed %i \n", rowsSend[i], rowsProcessed[i]);
         //printf("SEND: Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
         //showMatrixOrigianl(matrixOriginal);
-        
-
-        }
+         
     }
     else{ // DATA RECIVE
-      
-        for(i = 0; i < rowsSend[myrank]; i ++){
-            // Recive (Data, columns, type, where, tag)
-            if(strcmp(argv[4], "sobel") == 0){
+
+
+        if(strcmp(argv[4], "sobel") == 0){
+
+            for(i = 0; i < rowsSend[myrank]; i ++){
+                
+                // Recive (Data, columns, type, where, tag)
                 MPI_Recv(matrixFiltered[i], col + 2, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
+        
             }
-            else{
-                MPI_Recv(matrixOriginal[i], col, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
-            }
+
+        }
+        else{
+
+            for(i = 0; i < rowsSend[myrank]; i ++){
             
+                // Recive (Data, columns, type, where, tag)
+                MPI_Recv(matrixOriginal[i], col, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
+            
+            }
         }
     
         // printf("\nPROCESS [%i] RECIVE MATRIX ORIGINAL TO PROCESS [%i]\n", myrank, 0);
@@ -413,25 +440,43 @@ int main(int argc,char *argv[]){
 
         if(myrank == 0){  // Process 0 receives data
             
-            int rowStart = 0; // Firts row start at row 0
-            for(i = 1; i < nproces; i ++){
+            if(strcmp(argv[4], "sobel") == 0){ 
+                
+                int rowStart = 0; // Firts row start at row 0
+                for(i = 1; i < nproces; i ++){
                 
                 rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
                 //printf("Rows Start Recv: %i\n", rowStart);
             
                 for(j = 0; j < rowsProcessed[i]; j ++){ // Receives rows
-                    if(strcmp(argv[4], "sobel") == 0){ 
-                        MPI_Recv(matrixOriginal[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
-                    }
-                    else{
-                        MPI_Recv(matrixFiltered[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
-                    }
-                   
+                    
+                    MPI_Recv(matrixOriginal[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                    
                 }
                 
                 //printf("P[%i], Send to me %i rows\n", i, rowsProcessed[i]);
                 //showMatrixFiltered(matrixFiltered);
             }
+
+            }else{
+
+                int rowStart = 0; // Firts row start at row 0
+                for(i = 1; i < nproces; i ++){
+                
+                    rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
+                    //printf("Rows Start Recv: %i\n", rowStart);
+                
+                    for(j = 0; j < rowsProcessed[i]; j ++){ // Receives rows
+                    
+                        MPI_Recv(matrixFiltered[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                        
+                    }
+                    
+                    //printf("P[%i], Send to me %i rows\n", i, rowsProcessed[i]);
+                    //showMatrixFiltered(matrixFiltered);
+                }   
+            }
+            
 
         }
         else{  // All process send to process 0 the processed data                            

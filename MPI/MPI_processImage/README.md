@@ -23,7 +23,7 @@ they will be passed as arguments in the execution statement.
 As has been said, the "root" process will be in charge of reading and writing files, the "root" process will store all the information and distribute a set of rows to each "slave" process, it will receive the data from each "slave" process. and will write to file.
 
 Compile Sentence:
-➔ mpicc -o proc mpi_process.c -lm
+➔ mpicc -o proc MPI_processingImage.c -lm
 
 Execution Sentence:
 ➔ mpirun -np 5 proc lena4096x4096.raw 4096 4096 average outAverage4096.raw
