@@ -259,8 +259,7 @@ int main(int argc,char *argv[]){
         int rowStart = 0; // Firts row start at row 0
         int rowEnd = rowsSend[0] - 1 ; // Last row is all send - 1
 
-    
-        //printf("Process [%i]: elementsNeed %i, rowsProcessed %i \n", myrank, rowsSend[0], rowsProcessed[0]);
+        //printf("\nProcess [%i]: elementsNeed %i, rowsProcessed %i \n", myrank, rowsSend[0], rowsProcessed[0]);
         //printf("Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
 
         if(strcmp(argv[4], "sobel") == 0){
@@ -292,14 +291,15 @@ int main(int argc,char *argv[]){
                     MPI_Send(matrixOriginal[j], col, MPI_UNSIGNED_CHAR, i, 5, MPI_COMM_WORLD); 
                                           
                 }   
+
+            //printf("\nPROCESS [%i] SEND MATRIX ORIGINAL TO PROCESS [%i] \n", myrank, i);
+            //printf("Rows Send: %i, Rows Processed %i \n", rowsSend[i], rowsProcessed[i]);
+            //printf("SEND: Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
+       
             }
-   
+       
         }   
 
-                       
-        //printf("\nPROCESS [%i] SEND MATRIX ORIGINAL TO PROCESS [%i] \n", myrank, i);
-        //printf("Rows Send: %i, Rows Processed %i \n", rowsSend[i], rowsProcessed[i]);
-        //printf("SEND: Row Start %i -> Row End %i\n\n", rowStart, rowEnd);
         //showMatrixOrigianl(matrixOriginal);
          
     }
@@ -322,12 +322,15 @@ int main(int argc,char *argv[]){
             
                 // Recive (Data, columns, type, where, tag)
                 MPI_Recv(matrixOriginal[i], col, MPI_UNSIGNED_CHAR, 0, 5, MPI_COMM_WORLD, &status);
-            
+               
             }
+            
+            //printf("\nPROCESS [%i] RECIVE MATRIX ORIGINAL TO PROCESS [%i]\n", myrank, 0);
+            //printf("Rows Receives: %i \n", rowsSend[myrank]);
+            
         }
     
-        // printf("\nPROCESS [%i] RECIVE MATRIX ORIGINAL TO PROCESS [%i]\n", myrank, 0);
-        // printf("Rows Receives: %i \n", rowsSend[myrank]);
+        // 
         // showMatrixOrigianl(matrixOriginal);
     
     }
@@ -338,7 +341,7 @@ int main(int argc,char *argv[]){
         //  printf("COLUMS: %i\n", col);
         
         if(strcmp(argv[4], "average") == 0){ // compare two strings, if they are the same then = 0
-        
+            
             for(i = 1; i <= rowsProcessed[myrank]; i ++){
                 
                 for(j = 1; j < col - 1; j ++){
@@ -398,7 +401,7 @@ int main(int argc,char *argv[]){
              
             for(i = 1; i <= rowsProcessed[myrank]; i ++){
                 
-                for(j = 1; j < col + 1; j ++){
+                for(j = 1; j <= col; j ++){
 
                     // value of c
                     int C = 
@@ -460,7 +463,7 @@ int main(int argc,char *argv[]){
 
             }else{
 
-                int rowStart = 0; // Firts row start at row 0
+                int rowStart = 1; // Firts row start at row 1
                 for(i = 1; i < nproces; i ++){
                 
                     rowStart += rowsProcessed[i - 1]; // Row start became always add row processed - 1
@@ -468,7 +471,7 @@ int main(int argc,char *argv[]){
                 
                     for(j = 0; j < rowsProcessed[i]; j ++){ // Receives rows
                     
-                        MPI_Recv(matrixFiltered[rowStart + j] , col, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
+                        MPI_Recv(&matrixFiltered[rowStart + j][1] , col - 2, MPI_UNSIGNED_CHAR, i, 7, MPI_COMM_WORLD, &status);
                         
                     }
                     
@@ -490,7 +493,9 @@ int main(int argc,char *argv[]){
                 }
             }
             else{
-
+                
+                //printf("I'm [%i] & processed Row [1] to Row [%i]\n", myrank, rowsProcessed[myrank]);
+                //printf("Rows: %i, Col: %i\n", row, col);
                 for(j = 1; j <= rowsProcessed[myrank]; j ++){
                    
                     MPI_Send(&matrixFiltered[j][1], col - 2, MPI_UNSIGNED_CHAR, 0, 7, MPI_COMM_WORLD);
@@ -511,12 +516,14 @@ int main(int argc,char *argv[]){
             printf("Time: %f \n", finishtime - starttime);
             
             if(strcmp(argv[4], "sobel") == 0){ 
+                //printf("Rows: %i, Col: %i\n", row, col);
                 writeFile(matrixOriginal, row, col, argv[5]);
                 //writeTXTMatrix(matrixOriginal, row, col);
             }
             else{
+                //printf("Rows: %i, Col: %i\n", row, col);
                 writeFile(matrixFiltered, row, col, argv[5]);
-                writeTXTMatrix(matrixFiltered, row, col);
+                //writeTXTMatrix(matrixFiltered, row, col);
             }     
             
             FILE *f2 = fopen("data.txt", "w");

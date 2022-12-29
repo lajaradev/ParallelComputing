@@ -171,7 +171,9 @@ int main(int argc,char *argv[]){
 
     double accumulate; 
     double absCompare;
-    double absCompareMax;  
+    double absCompareMax;
+    double absCompareMin;
+    double absReal;    
     double **matrix; // Create new matrix
     double *x1;
     double *x2;
@@ -312,26 +314,32 @@ int main(int argc,char *argv[]){
         for(i = 0; i < rowsSend[myrank]; i ++){ // Get the absolute value and compare it with the auxiliary variable that is updated
             if(absCompare < fabs(x1[i])){
                 absCompare = fabs(x1[i]);
+                absReal = x1[i];
             }
         }
-
+       
         //printf("P[%i] -> ABS: %1.1f ->  -> REAL: %1.1f\n",myrank, absCompare, absReal);
         
         //MPI_Allreduce(void *operando, void *result, int NumData, MPI_Datatype, MPI_Op, MPI_Coom)
         // Send the absolute maximums calculated in all processes
        
-        MPI_Allreduce(&absCompare, &absCompareMax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        MPI_Allreduce(&absReal, &absCompareMax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        MPI_Allreduce(&absReal, &absCompareMin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 
-        //printf("P[%i]. absCompare: %1.1f - Max: %1.1f. - Min: %1.1f. - Real: %1.1f.\n",myrank, absCompare, absCompareMax,absCompareMin, absReal);
-
-        absCompare = absCompareMax;
+        if(fabs(absCompareMax) > (fabs(absCompareMin))){
+            absReal = absCompareMax;
+        }
+        else{
+            absReal = absCompareMin;
+        }
         
+        //printf("P[%i]. absCompare: %1.1f - Max: %1.1f. - Min: %1.1f. - Real: %1.1f.\n",myrank, absCompare, absCompareMax,absCompareMin, absReal);
         //printf("P[%i]. absCompare: %.2f\n",myrank, absCompare);
         //printf("P[%i]. absComparemax: %.2f\n",myrank, absCompareMax);
         
         if(absCompare > 25.0){
             for(i = 0; i < rowsSend[myrank]; i ++){
-                x1[i] = x1[i] / absCompare; // Fill the vector x1 with the results to use it in the next iteration  
+                x1[i] = x1[i] / absReal; // Fill the vector x1 with the results to use it in the next iteration  
             }
         }
         
@@ -347,33 +355,23 @@ int main(int argc,char *argv[]){
         //showArray(x2);
         
         if(myrank == 0){ // Look for the position of the maximum
+            fprintf(f2, "Max in iteration %i: %1.1f\n", k, absReal);  // Print the results
             
-           // printf("absCompare: %1.1f\n", absCompare);
-           // printf("X2[11200]: %1.1f\n", x2[11200]);
-            //printf("X2[14309]: %1.1f\n", x2[14309]);
-           // printf("X2[10904]: %1.1f\n", x2[10904]);
-           // printf("X2[14041]: %1.1f\n", x2[14041]);*/
-
-            absHigher = 0;
+            // Show index of the absolute value
+            /*absHigher = 0;
             for(i = 0; i < N; i ++){ // Get the absolute value and compare it with the auxiliary variable that is updated
                 
-                if(absCompare == fabs(x2[i])){
-                    absHigher = i; // Tells us the position of the maximum value
-                    if(x2[i] < 0){
-                        absCompare = absCompare * -1.0;
-                    }
+                if(absReal == fabs(x2[i])){
+                    absHigher = i; // Tells us the position of the maximum value 
                 }
                 else if(1.00 == fabs(x2[i])){
                     absHigher = i;
-                    absCompare = absCompare * x2[i];
-                }
-                
-            }
-
-            //printf("Max in iteration %i: %1.1f (%i)\n", k, absCompare, absHigher);  // Print the results
-            fprintf(f2, "Max in iteration %i: %1.1f (%i)\n", k, absCompare, absHigher);  // Print the results
+                }  
+            }*/
+            //printf("Max in iteration %i: %1.1f (%i)\n", k, absReal, absHigher);  // Print the results
         }
-        
+
+
     }
 
     // END LOOP ITERATIONS
@@ -381,7 +379,7 @@ int main(int argc,char *argv[]){
     if(myrank == 0){
 
         finishtime = MPI_Wtime(); // moment of end
-        //printf("Time: %f \n", finishtime - starttime);
+        printf("Time: %f \n", finishtime - starttime);
         
         fprintf(f2, "\nDATA -- ITERATIVE SYSTEM \n");
         fprintf(f2, "Matrix File Name: %s \n", argv[1]);
